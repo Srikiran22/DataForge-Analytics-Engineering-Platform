@@ -1,0 +1,28 @@
+# Seed generation parameters. Changing ANY value changes generated data and
+# invalidates prior benchmark numbers - do it as a reviewed commit.
+rng_seed: 20260826
+
+date_window:
+  start: "2024-09-01"
+  end: "2026-08-25"
+
+volumes:
+  customers: 40000
+  regions: 12
+  products: 8000
+  orders_per_day_avg: 340
+  items_per_order_avg: 1.8
+  returns_rate: 0.04
+
+imperfections:
+  missing_email_pct: 3.0          # I-01
+  duplicate_email_pct: 0.3        # I-09
+  order_replay_pct: 1.0           # I-02 (replayed into next day's file)
+  invalid_customer_fk_pct: 0.5    # I-03
+  malformed_line_pct: 0.2         # I-04 (orders + returns)
+  category_casing_variants: true  # I-07
+  price_outlier_pct: 0.1          # I-08
+  late_payment_pct: 2.0           # I-06
+
+schema_drift:
+  products_v2_from: "2026-02-01"  # API serves v1 before this date, v2 after (I-05)

@@ -1,0 +1,24 @@
+# Phase 0/2 scope: PostgreSQL as simulated OLTP source only (ADR 0001).
+# The warehouse is DuckDB (no service). Later phases extend this file
+# (products-api mock now, Airflow/dashboard later) - kept minimal by design.
+
+services:
+  source-postgres:
+    image: postgres:17
+    container_name: dataforge-source-oltp
+    environment:
+      POSTGRES_DB: sourcedb
+      POSTGRES_USER: ${SOURCE_PG_ADMIN_USER:-source_admin}
+      POSTGRES_PASSWORD: ${SOURCE_PG_ADMIN_PASSWORD:-change_me_admin}
+    ports:
+      - "${SOURCE_PG_PORT:-5433}:5432"
+    volumes:
+      - source_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SOURCE_PG_ADMIN_USER:-source_admin} -d sourcedb"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  source_pgdata:
