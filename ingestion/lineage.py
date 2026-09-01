@@ -1,4 +1,15 @@
+import re
+
 import duckdb
+
+TABLE_NAME_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$')
+
+
+def _validate_table_name(table: str) -> None:
+    """Validate table name to prevent SQL injection via identifier interpolation."""
+    if not TABLE_NAME_PATTERN.match(table):
+        raise ValueError(f"Invalid table name: {table}")
+
 
 LINEAGE_DDL = """
 CREATE TABLE IF NOT EXISTS lineage.batch_lineage (
@@ -34,6 +45,7 @@ def record_lineage(
     run_mode: str,
 ) -> None:
     """Insert-or-replace lineage so re-running a batch updates its own entry."""
+    _validate_table_name(target_raw_table)
     ensure_lineage_table(conn)
     conn.execute("BEGIN TRANSACTION")
     try:

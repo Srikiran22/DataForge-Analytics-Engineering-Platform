@@ -1,0 +1,180 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "Staged customer master data from CSV"
+    columns:
+      - name: customer_id
+        description: "Natural key"
+        tests:
+          - not_null
+          - unique
+      - name: email
+        description: "Normalized email (lowercase, null if empty)"
+      - name: region_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_regions')
+              field: region_id
+      - name: segment
+        tests:
+          - accepted_values:
+              values: ['consumer', 'corporate']
+      - name: signup_date
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null
+
+  - name: stg_regions
+    description: "Staged region reference data"
+    columns:
+      - name: region_id
+        tests:
+          - not_null
+          - unique
+      - name: region_name
+        tests:
+          - not_null
+      - name: country
+        tests:
+          - not_null
+
+  - name: stg_orders
+    description: "Staged order headers, deduplicated by order_id keeping latest updated_at"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+      - name: order_ts
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['placed', 'shipped', 'delivered', 'cancelled', 'returned']
+      - name: total_amount_cents
+        tests:
+          - not_null
+      - name: currency
+        tests:
+          - accepted_values:
+              values: ['USD']
+      - name: updated_at
+        tests:
+          - not_null
+
+  - name: stg_returns
+    description: "Staged return events, deduplicated by return_id"
+    columns:
+      - name: return_id
+        tests:
+          - not_null
+          - unique
+      - name: order_item_id
+        tests:
+          - not_null
+      - name: returned_at
+        tests:
+          - not_null
+      - name: reason
+        tests:
+          - accepted_values:
+              values: ['wrong_item', 'damaged', 'not_as_described', 'better_price', 'changed_mind']
+      - name: quantity
+        tests:
+          - not_null
+
+  - name: stg_products
+    description: "Staged product catalog from API, category normalized to lowercase"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+      - name: category
+        tests:
+          - not_null
+      - name: price_cents
+        tests:
+          - not_null
+      - name: active
+        tests:
+          - not_null
+
+  - name: stg_order_items
+    description: "Staged order line items, deduplicated by item_id"
+    columns:
+      - name: item_id
+        tests:
+          - not_null
+          - unique
+      - name: order_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+      - name: quantity
+        tests:
+          - not_null
+      - name: unit_price_cents
+        tests:
+          - not_null
+      - name: line_amount_cents
+        tests:
+          - not_null
+
+  - name: stg_payments
+    description: "Staged payment events, deduplicated by payment_id keeping latest updated_at"
+    columns:
+      - name: payment_id
+        tests:
+          - not_null
+          - unique
+      - name: order_id
+        tests:
+          - not_null
+      - name: amount_cents
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['pending', 'settled', 'failed', 'refunded']
+      - name: method
+        tests:
+          - accepted_values:
+              values: ['card', 'paypal', 'bank_transfer']
+      - name: event_ts
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null
+
+  - name: stg_inventory_levels
+    description: "Staged inventory snapshots, deduplicated by product_id+warehouse_id keeping latest"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+      - name: warehouse_id
+        tests:
+          - not_null
+      - name: stock_on_hand
+        tests:
+          - not_null
+      - name: reorder_point
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null

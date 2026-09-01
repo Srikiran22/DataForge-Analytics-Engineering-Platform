@@ -1,0 +1,378 @@
+version: 2
+models:
+- name: dim_region
+  description: Conformed region dimension
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: region_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: region_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: region_name
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: country
+    tests:
+    - not_null
+    data_type: VARCHAR
+- name: dim_product
+  description: Conformed product dimension
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: product_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: product_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: name
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: category
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: price_cents
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: active
+    tests:
+    - not_null
+    data_type: BOOLEAN
+  - name: brand
+    data_type: VARCHAR
+- name: dim_date
+  description: Conformed date dimension
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: date_sk
+    tests:
+    - not_null
+    - unique
+    data_type: BIGINT
+  - name: date
+    tests:
+    - not_null
+    - unique
+    data_type: DATE
+  - name: year
+    tests:
+    - not_null
+    data_type: SMALLINT
+  - name: month
+    tests:
+    - not_null
+    data_type: SMALLINT
+  - name: day
+    data_type: SMALLINT
+  - name: day_of_week
+    data_type: SMALLINT
+  - name: day_name
+    data_type: VARCHAR
+  - name: week_of_year
+    data_type: SMALLINT
+  - name: is_weekend
+    data_type: BOOLEAN
+  - name: is_holiday
+    data_type: BOOLEAN
+  - name: fiscal_year
+    data_type: BIGINT
+  - name: fiscal_quarter
+    data_type: INTEGER
+  - name: month_name
+    data_type: VARCHAR
+  - name: quarter
+    data_type: SMALLINT
+- name: dim_customer
+  description: Customer dimension with SCD2 history
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: customer_sk
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: customer_id
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: first_name
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: last_name
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: email
+    data_type: VARCHAR
+    description: Email nullable per I-01
+  - name: region_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_region')
+        field: region_sk
+    data_type: VARCHAR
+  - name: segment
+    tests:
+    - accepted_values:
+        values:
+        - consumer
+        - corporate
+    data_type: VARCHAR
+  - name: signup_date
+    tests:
+    - not_null
+    data_type: DATE
+  - name: dbt_valid_from
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+  - name: is_current
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - true
+        - false
+    data_type: BOOLEAN
+  - name: city
+    data_type: VARCHAR
+  - name: dbt_valid_to
+    data_type: TIMESTAMP
+- name: fct_orders
+  description: Order header fact table (incremental merge)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: order_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: order_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: customer_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_customer')
+        field: customer_sk
+    data_type: VARCHAR
+  - name: order_date_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_sk
+    data_type: BIGINT
+  - name: status
+    tests:
+    - accepted_values:
+        values:
+        - placed
+        - shipped
+        - delivered
+        - cancelled
+        - returned
+    data_type: VARCHAR
+  - name: total_amount_cents
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: currency
+    tests:
+    - accepted_values:
+        values:
+        - USD
+    data_type: VARCHAR
+  - name: order_ts
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+  - name: updated_at
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+- name: fct_order_items
+  description: Order line items fact table (incremental merge)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: order_item_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: item_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: order_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('fct_orders')
+        field: order_sk
+    data_type: VARCHAR
+  - name: product_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_product')
+        field: product_sk
+    data_type: VARCHAR
+  - name: quantity
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: unit_price_cents
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: line_amount_cents
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: updated_at
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+- name: fct_payments
+  description: Payment events fact table (incremental merge)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: payment_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: payment_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: order_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('fct_orders')
+        field: order_sk
+    data_type: VARCHAR
+  - name: payment_date_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_sk
+    data_type: BIGINT
+  - name: amount_cents
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: status
+    tests:
+    - accepted_values:
+        values:
+        - pending
+        - settled
+        - failed
+        - refunded
+    data_type: VARCHAR
+  - name: method
+    tests:
+    - accepted_values:
+        values:
+        - card
+        - paypal
+        - bank_transfer
+    data_type: VARCHAR
+  - name: event_ts
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+  - name: updated_at
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+- name: fct_returns
+  description: Returns fact table (incremental merge)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: return_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: return_id
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: order_item_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('fct_order_items')
+        field: order_item_sk
+    data_type: VARCHAR
+  - name: return_date_sk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_sk
+    data_type: BIGINT
+  - name: reason
+    tests:
+    - accepted_values:
+        values:
+        - wrong_item
+        - damaged
+        - not_as_described
+        - better_price
+        - changed_mind
+    data_type: VARCHAR
+  - name: quantity
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: returned_at
+    tests:
+    - not_null
+    data_type: TIMESTAMP
+  - name: updated_at
+    tests:
+    - not_null
+    data_type: TIMESTAMP

@@ -1,0 +1,51 @@
+name: 'dataforge'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dataforge'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  +materialized: view
+  +schema: analytics
+  staging:
+    +materialized: view
+    +schema: staging
+  intermediate:
+    +materialized: view
+    +schema: intermediate
+  core:
+    +materialized: table
+    +schema: analytics
+    +on_schema_change: append_new_columns
+    +contract:
+      enforced: true
+  marts:
+    +materialized: table
+    +schema: marts
+    +on_schema_change: append_new_columns
+    +contract:
+      enforced: true
+
+seeds:
+  +schema: seeds
+  +materialized: table
+
+vars:
+  lookback_days: 7
+  late_arrival_window_days: 7
+
+dispatch:
+  - macro_namespace: dbt
+    search_order: ['dataforge', 'dbt']

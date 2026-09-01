@@ -1,0 +1,16 @@
+# DuckDB profile for local development
+# Copy to ~/.dbt/profiles.yml or set DBT_PROFILES_DIR to this directory
+
+dataforge:
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('WAREHOUSE_PATH') }}"
+      schema: main
+      threads: 4
+    prod:
+      type: duckdb
+      path: "{{ env_var('WAREHOUSE_PATH') }}"
+      schema: main
+      threads: 8
+  target: dev

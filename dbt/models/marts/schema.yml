@@ -1,0 +1,202 @@
+version: 2
+models:
+- name: mart_sales
+  description: Sales mart answering BQ-01 (monthly revenue by region), BQ-02 (AOV),
+    BQ-03 (order count by status)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: order_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: order_id
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: date
+    tests:
+    - not_null
+    data_type: DATE
+  - name: region_name
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: gross_revenue
+    tests:
+    - not_null
+    data_type: DOUBLE
+  - name: net_revenue
+    tests:
+    - not_null
+    data_type: DOUBLE
+  - name: country
+    data_type: VARCHAR
+  - name: currency
+    data_type: VARCHAR
+  - name: month
+    data_type: SMALLINT
+  - name: month_name
+    data_type: VARCHAR
+  - name: quarter
+    data_type: SMALLINT
+  - name: returned_revenue
+    data_type: DOUBLE
+  - name: settled_revenue
+    data_type: DOUBLE
+  - name: status
+    data_type: VARCHAR
+  - name: total_amount_cents
+    data_type: BIGINT
+  - name: year
+    data_type: SMALLINT
+- name: mart_customer_retention
+  description: Customer retention mart answering BQ-04 (repeat purchase rate) and
+    BQ-05 (cohort retention)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: cohort_month
+    tests:
+    - not_null
+    data_type: DATE
+  - name: customers
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: retention_rate
+    tests:
+    - not_null
+    data_type: FLOAT
+  - name: cohort_revenue
+    data_type: DOUBLE
+  - name: first_order
+    data_type: TIMESTAMP
+  - name: last_order
+    data_type: TIMESTAMP
+  - name: order_month
+    data_type: DATE
+  - name: repeat_orders
+    data_type: BIGINT
+- name: mart_product_performance
+  description: Product performance mart answering BQ-06 (product revenue/units)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: product_sk
+    tests:
+    - not_null
+    - unique
+    data_type: VARCHAR
+  - name: product_id
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: product_revenue
+    tests:
+    - not_null
+    data_type: DOUBLE
+  - name: units_sold
+    tests:
+    - not_null
+    data_type: HUGEINT
+  - name: return_rate
+    tests:
+    - not_null
+    data_type: FLOAT
+  - name: avg_unit_price
+    data_type: DOUBLE
+  - name: brand
+    data_type: VARCHAR
+  - name: category
+    data_type: VARCHAR
+  - name: name
+    data_type: VARCHAR
+  - name: order_count
+    data_type: BIGINT
+  - name: returned_revenue
+    data_type: DOUBLE
+  - name: returned_units
+    data_type: HUGEINT
+  - name: revenue_rank
+    data_type: BIGINT
+- name: mart_returns
+  description: Returns mart answering BQ-07 (return rates by product/category) and
+    BQ-08 (financial impact)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: return_date_sk
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: reason
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: category
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: total_returned_units
+    tests:
+    - not_null
+    data_type: HUGEINT
+  - name: total_returned_revenue
+    tests:
+    - not_null
+    data_type: DOUBLE
+  - name: date
+    data_type: DATE
+  - name: region_name
+    data_type: VARCHAR
+  - name: return_count
+    data_type: BIGINT
+- name: mart_inventory
+  description: Inventory mart answering BQ-09 (inventory position, low stock alerts)
+  config:
+    contract:
+      enforced: true
+  columns:
+  - name: product_sk
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: warehouse_id
+    tests:
+    - not_null
+    data_type: VARCHAR
+  - name: stock_on_hand
+    tests:
+    - not_null
+    data_type: BIGINT
+  - name: days_of_cover
+    tests: []
+    data_type: DOUBLE
+  - name: low_stock_flag
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - true
+        - false
+    data_type: BOOLEAN
+  - name: avg_daily_units_sold
+    data_type: DOUBLE
+  - name: brand
+    data_type: VARCHAR
+  - name: category
+    data_type: VARCHAR
+  - name: name
+    data_type: VARCHAR
+  - name: product_id
+    data_type: VARCHAR
+  - name: reorder_point
+    data_type: BIGINT
+  - name: snapshot_date
+    data_type: TIMESTAMP

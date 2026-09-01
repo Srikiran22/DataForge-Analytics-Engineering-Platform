@@ -1,8 +1,20 @@
+import re
+
 import duckdb
+
+TABLE_NAME_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$')
+
+
+def _validate_table_name(table: str) -> None:
+    """Validate table name to prevent SQL injection via identifier interpolation."""
+    if not TABLE_NAME_PATTERN.match(table):
+        raise ValueError(f"Invalid table name: {table}")
 
 
 def ensure_quarantine_table(conn: duckdb.DuckDBPyConnection, table: str):
-    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {table.split('.')[0]}")
+    _validate_table_name(table)
+    schema = table.split('.')[0]
+    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     ddl = f"""
         CREATE TABLE IF NOT EXISTS {table} (
             source_file VARCHAR,
@@ -29,6 +41,7 @@ def quarantine_records(
     """Write rejected records with an explicit reason. Never raises on empty input."""
     if not entries:
         return 0
+    _validate_table_name(table)
     ensure_quarantine_table(conn, table)
     columns = [
         "source_file", "source_row_number", "reason", "error_detail",
@@ -54,6 +67,7 @@ def quarantine_records(
 
 
 def quarantine_counts_by_reason(conn: duckdb.DuckDBPyConnection, table: str) -> dict:
+    _validate_table_name(table)
     rows = conn.execute(
         f"SELECT reason, COUNT(*) FROM {table} GROUP BY reason ORDER BY reason"
     ).fetchall() if _table_exists(conn, table) else []
@@ -61,6 +75,7 @@ def quarantine_counts_by_reason(conn: duckdb.DuckDBPyConnection, table: str) -> 
 
 
 def _table_exists(conn: duckdb.DuckDBPyConnection, table: str) -> bool:
+    _validate_table_name(table)
     schema, name = table.split(".")
     row = conn.execute(
         """

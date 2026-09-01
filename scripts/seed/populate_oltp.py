@@ -51,19 +51,22 @@ def main() -> int:
                 cur.execute(f"DROP TABLE IF EXISTS source_oltp.{table} CASCADE")
             cols_ddl = ", ".join(
                 f"{c} BIGINT" if c.endswith("_cents") or c in ("quantity", "stock_on_hand", "reorder_point")
-                else ("TIMESTAMP" if c.endswith(("_at", "_ts")) else "TEXT")
+                else (f"{c} TIMESTAMP" if c.endswith(("_at", "_ts")) else f"{c} TEXT")
                 for c in columns
             )
             cur.execute(f"CREATE TABLE IF NOT EXISTS source_oltp.{table} ({cols_ddl})")
             cur.execute(f"TRUNCATE source_oltp.{table}")
 
             csv_path = seed_dir / f"{table}.csv"
-            with csv_path.open("r", encoding="utf-8") as f:
-                next(f)
-                cur.copy.expert(
-                    f"COPY source_oltp.{table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv)",
-                    f,
-                )
+            copy_stmt = (
+                f"COPY source_oltp.{table} ({', '.join(columns)}) "
+                f"FROM STDIN WITH (FORMAT csv, HEADER false)"
+            )
+            with cur.copy(copy_stmt) as copy:
+                with csv_path.open("r", encoding="utf-8", newline="") as f:
+                    next(f)
+                    while chunk := f.read(1 << 20):
+                        copy.write(chunk)
             count = cur.execute(f"SELECT COUNT(*) FROM source_oltp.{table}").fetchone()[0]
             print(f"{table}: {count} rows")
 

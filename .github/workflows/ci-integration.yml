@@ -1,0 +1,52 @@
+name: ci-integration
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sourcedb
+          POSTGRES_USER: source_admin
+          POSTGRES_PASSWORD: change_me_admin
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U source_admin -d sourcedb"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements/dev.txt -r dashboards/requirements.txt dbt-duckdb
+      - run: python scripts/seed/generate_sources.py
+      - run: python scripts/seed/populate_oltp.py
+        env:
+          SOURCE_PG_HOST: localhost
+          SOURCE_PG_PORT: 5433
+          SOURCE_PG_DB: sourcedb
+          SOURCE_PG_ADMIN_USER: source_admin
+          SOURCE_PG_ADMIN_PASSWORD: change_me_admin
+      - run: python -m ingestion.cli init-warehouse
+      - run: python -m ingestion.cli load --source customers --full
+      - run: python -m ingestion.cli load --source orders
+      - run: python -m ingestion.cli load --source returns
+      - run: python -m ingestion.cli load --source products
+        env:
+          PRODUCTS_API_URL: http://localhost:8100
+      - run: WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build --profiles-dir dbt
+      - run: python -m pytest tests/ -v
+      - run: ruff check ingestion dashboards scripts tests
+  config-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml
+      - run: python -c "import yaml; yaml.safe_load(open('configs/seed.yaml')); print('seed config valid')"

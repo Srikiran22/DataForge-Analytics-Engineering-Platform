@@ -1,0 +1,126 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    freshness:
+      warn_after: {count: 26, period: hour}
+      error_after: {count: 50, period: hour}
+    loader: ingestion
+    tables:
+      - name: customers
+        identifier: customers
+        description: "Customer master data from CSV export"
+        columns:
+          - name: customer_id
+            description: "Natural key"
+            tests:
+              - not_null
+              - unique
+          - name: email
+            description: "Customer email (nullable per I-01)"
+      - name: regions
+        identifier: regions
+        description: "Static region reference data"
+        columns:
+          - name: region_id
+            tests:
+              - not_null
+              - unique
+      - name: orders
+        identifier: orders
+        description: "Order headers from NDJSON with watermark"
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: order_id
+            tests:
+              - not_null
+          - name: customer_id
+            tests:
+              - not_null
+          - name: order_ts
+            tests:
+              - not_null
+          - name: status
+            tests:
+              - not_null
+          - name: total_amount_cents
+            tests:
+              - not_null
+          - name: updated_at
+            tests:
+              - not_null
+      - name: returns
+        identifier: returns
+        description: "Return events from NDJSON"
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: return_id
+            tests:
+              - not_null
+          - name: order_item_id
+            tests:
+              - not_null
+          - name: returned_at
+            tests:
+              - not_null
+          - name: reason
+            tests:
+              - not_null
+      - name: products
+        identifier: products
+        description: "Product catalog from API (v1/v2)"
+        columns:
+          - name: product_id
+            tests:
+              - not_null
+              - unique
+          - name: category
+            tests:
+              - not_null
+      - name: order_items
+        identifier: order_items
+        description: "Order line items from OLTP"
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: item_id
+            tests:
+              - not_null
+          - name: order_id
+            tests:
+              - not_null
+      - name: payments
+        identifier: payments
+        description: "Payment events from OLTP"
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: payment_id
+            tests:
+              - not_null
+          - name: order_id
+            tests:
+              - not_null
+      - name: inventory_levels
+        identifier: inventory_levels
+        description: "Inventory snapshots from OLTP"
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: product_id
+            tests:
+              - not_null
+          - name: warehouse_id
+            tests:
+              - not_null
+          - name: stock_on_hand
+            tests:
+              - not_null

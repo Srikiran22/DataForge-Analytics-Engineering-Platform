@@ -13,7 +13,7 @@ import pytest
 ROOT = __import__("pathlib").Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from ingestion import pipeline
+from ingestion import pipeline, watermarks
 
 
 def _pg_reachable() -> bool:
@@ -61,12 +61,75 @@ def test_full_pipeline_load_from_rdbms_shape(wh):
 
     rerun = pipeline.run_source(wh, "order_items", batch_id="pg-items-1")
     after = wh.execute("SELECT COUNT(*) FROM raw.order_items").fetchone()[0]
-    assert rerun["replaced_prior_rows"] == before == after
+    assert rerun["extracted"] == 0
+    assert before == after
+
+    full_rerun = pipeline.run_source(wh, "order_items", batch_id="pg-items-1", full=True)
+    final = wh.execute("SELECT COUNT(*) FROM raw.order_items").fetchone()[0]
+    assert full_rerun["replaced_prior_rows"] == before
+    assert full_rerun["loaded"] == before
+    assert final == before
 
 
 def test_inventory_levels_load(wh):
     stats = pipeline.run_source(wh, "inventory_levels", batch_id="pg-inv-1")
     assert stats["loaded"] > 0
+
+
+def test_rdbms_incremental_second_run_extracts_zero_new_rows(wh):
+    first = pipeline.run_source(wh, "payments", batch_id="pg-pay-1")
+    assert first["loaded"] > 0
+    assert first["watermark_advanced"] is True
+    rows_after_first = wh.execute("SELECT COUNT(*) FROM raw.payments").fetchone()[0]
+
+    second = pipeline.run_source(wh, "payments", batch_id="pg-pay-2")
+    assert second["extracted"] == 0
+    assert second["loaded"] == 0
+    assert second["watermark_advanced"] is False
+    assert wh.execute("SELECT COUNT(*) FROM raw.payments").fetchone()[0] == rows_after_first
+
+
+def test_rdbms_duplicate_batch_rerun_never_duplicates(wh):
+    pipeline.run_source(wh, "order_items", batch_id="pg-dup-batch")
+    count_a = wh.execute("SELECT COUNT(*) FROM raw.order_items").fetchone()[0]
+
+    second = pipeline.run_source(wh, "order_items", batch_id="pg-dup-batch")
+    assert second["extracted"] == 0 and second["loaded"] == 0
+    count_b = wh.execute("SELECT COUNT(*) FROM raw.order_items").fetchone()[0]
+    assert count_a == count_b
+
+    third = pipeline.run_source(wh, "order_items", batch_id="pg-dup-batch", full=True)
+    count_c = wh.execute("SELECT COUNT(*) FROM raw.order_items").fetchone()[0]
+    assert third["replaced_prior_rows"] == count_a
+    assert third["loaded"] == count_a
+    assert count_c == count_a
+
+    batches = wh.execute(
+        "SELECT COUNT(DISTINCT _batch_id) FROM raw.order_items"
+    ).fetchone()[0]
+    assert batches == 1
+
+
+def test_rdbms_failed_load_does_not_advance_watermark(wh, monkeypatch):
+    pipeline.run_source(wh, "payments", batch_id="pg-wm-good")
+    wm_before = watermarks.get_watermark(wh, "payments")
+    rows_before = wh.execute("SELECT COUNT(*) FROM raw.payments").fetchone()[0]
+    assert wm_before is not None
+
+    def failing_load(*args, **kwargs):
+        raise RuntimeError("rdbms load exploded")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pipeline.duckdb_loader, "load_batch", failing_load)
+        with pytest.raises(RuntimeError, match="rdbms load exploded"):
+            pipeline.run_source(wh, "payments", batch_id="pg-wm-bad")
+
+    assert watermarks.get_watermark(wh, "payments") == wm_before
+    assert wh.execute("SELECT COUNT(*) FROM raw.payments").fetchone()[0] == rows_before
+
+    recovered = pipeline.run_source(wh, "payments", batch_id="pg-wm-recovery")
+    assert recovered["loaded"] == 0
+    assert watermarks.get_watermark(wh, "payments") == wm_before
 
 
 def _dsn() -> str:
