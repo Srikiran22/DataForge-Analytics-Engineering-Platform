@@ -17,6 +17,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U source_admin -d sourcedb"
           --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      SOURCE_PG_HOST: localhost
+      SOURCE_PG_PORT: 5433
+      SOURCE_PG_DB: sourcedb
+      SOURCE_PG_USER: source_reader
+      SOURCE_PG_PASSWORD: change_me_source
+      SOURCE_PG_ADMIN_USER: source_admin
+      SOURCE_PG_ADMIN_PASSWORD: change_me_admin
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -25,14 +33,9 @@ jobs:
       - run: pip install -r requirements/dev.txt -r dashboards/requirements.txt dbt-duckdb
       - run: python scripts/seed/generate_sources.py
       - run: python scripts/seed/populate_oltp.py
-        env:
-          SOURCE_PG_HOST: localhost
-          SOURCE_PG_PORT: 5433
-          SOURCE_PG_DB: sourcedb
-          SOURCE_PG_ADMIN_USER: source_admin
-          SOURCE_PG_ADMIN_PASSWORD: change_me_admin
       - run: python -m ingestion.cli init-warehouse
       - run: python -m ingestion.cli load --source customers --full
+      - run: python -m ingestion.cli load --source regions
       - run: python -m ingestion.cli load --source orders
       - run: python -m ingestion.cli load --source returns
       - run: |
@@ -41,6 +44,9 @@ jobs:
           python -m ingestion.cli load --source products
         env:
           PRODUCTS_API_URL: http://localhost:8100
+      - run: python -m ingestion.cli load --source order_items
+      - run: python -m ingestion.cli load --source payments
+      - run: python -m ingestion.cli load --source inventory_levels
       - run: WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build --profiles-dir dbt --project-dir dbt
       - run: python -m pytest tests/ -v
       - run: ruff check ingestion dashboards scripts tests

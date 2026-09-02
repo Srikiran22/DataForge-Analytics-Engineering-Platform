@@ -22,7 +22,12 @@ st.set_page_config(page_title="DataForge — Analytics", layout="wide")
 
 @st.cache_resource
 def conn_ro():
-    return duckdb.connect(str(WAREHOUSE), read_only=True)
+    if not WAREHOUSE.exists():
+        return None
+    try:
+        return duckdb.connect(str(WAREHOUSE), read_only=True)
+    except Exception:
+        return None
 
 def q(sql: str, params=None) -> pd.DataFrame:
     # Guard: reject accidental raw/staging access at query time (defense in depth).
@@ -35,7 +40,12 @@ def q(sql: str, params=None) -> pd.DataFrame:
     for forbidden in ["main_analytics.fct_", "main_analytics.dim_", "main_intermediate.", "information_schema"]:
         assert forbidden not in lowered, f"dashboard must not query {forbidden}"
     c = conn_ro()
-    return c.execute(sql, params or []).df()
+    if c is None:
+        return pd.DataFrame()
+    try:
+        return c.execute(sql, params or []).df()
+    except Exception:
+        return pd.DataFrame()
 
 st.title("DataForge — Analytics Engineering Platform")
 st.caption(
