@@ -1,38 +1,55 @@
 # Environment / secrets
 .env
 *.env.local
+*.env.*
+!.env.example
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
 .venv/
 venv/
+ENV/
+env/
 *.egg-info/
+dist/
+build/
+
+# Testing & Linting
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
 
 # dbt
 dbt/target/
 dbt/logs/
 dbt/dbt_packages/
+dbt/.user.yml
+*.duckdb
+*.duckdb.wal
 
 # Airflow
 airflow/logs/
 airflow/*.db
 airflow/*.sqlite3
+airflow/*.pid
 
 # Data artifacts - everything under data/ is regenerable via `make seed`
 # (deterministic seeded generator); never commit bulk data
 data/
-
-# Python
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 .codegraph/
 logs/
-
+*.log
