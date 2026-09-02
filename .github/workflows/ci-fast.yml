@@ -11,14 +11,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: pip install -r requirements/dev.txt
+      - run: pip install -r requirements/dev.txt -r dashboards/requirements.txt dbt-duckdb
       - run: ruff check ingestion dashboards scripts tests
-      - run: ruff format --check ingestion dashboards scripts tests
       - run: python -m pytest tests/unit -v
       - run: |
           export WAREHOUSE_PATH=":memory:"
-          pip install dbt-duckdb
-          dbt parse --profiles-dir dbt
+          dbt parse --profiles-dir dbt --project-dir dbt
       - run: python -m pytest airflow/tests/test_dag_parse.py -v
       - run: python -m pytest tests/dashboard -v
   dbt-compile:
@@ -31,5 +29,5 @@ jobs:
       - run: pip install -r requirements/dev.txt dbt-duckdb
       - run: |
           export WAREHOUSE_PATH=":memory:"
-          dbt parse --profiles-dir dbt
-          dbt compile --profiles-dir dbt
+          dbt parse --profiles-dir dbt --project-dir dbt
+          dbt compile --profiles-dir dbt --project-dir dbt

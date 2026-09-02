@@ -5,6 +5,17 @@ from collections.abc import Iterator
 
 import psycopg
 
+IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_identifier(name: str) -> None:
+    """Validate a SQL identifier (schema, table, column, or field name).
+
+    Raises ValueError with 'Invalid SQL identifier' when unacceptable.
+    """
+    if not isinstance(name, str) or not IDENTIFIER_PATTERN.match(name):
+        raise ValueError(f"Invalid SQL identifier: {name}")
+
 
 def _normalize(value):
     """Convert DB-native types to JSON-safe equivalents so every source shape
@@ -18,25 +29,6 @@ def _normalize(value):
 
 def connect(dsn: str):
     return psycopg.connect(dsn)
-
-
-def _validate_identifier(name: str) -> None:
-    """Validate a SQL identifier (schema, table, column, or field name).
-
-    Rules enforced:
-    - Must be a str
-    - Must start with a letter (A-Z, a-z) or underscore
-    - May contain only letters, digits, and underscores
-    - No dots, whitespace, or SQL metacharacters allowed
-
-    Raises ValueError with the message "Invalid SQL identifier" when the
-    identifier is not acceptable. Tests rely on this exact message.
-    """
-    if not isinstance(name, str):
-        raise ValueError("Invalid SQL identifier")
-    # Simple conservative pattern: starts with letter or underscore, then letters/digits/underscores
-    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
-        raise ValueError("Invalid SQL identifier")
 
 
 def _stream_rows(cur, columns: list[str], watermark_field: str | None) -> Iterator[tuple[dict, str | None]]:
@@ -69,14 +61,11 @@ def extract_watermarked(
     The caller owns watermark persistence; this function never writes state.
     Uses fetchmany for memory-efficient streaming.
     """
-    # Validate identifiers strictly before composing the SQL. This defends against
-    # accidental SQL injection via schema/table/column names. The tests expect
-    # ValueError("Invalid SQL identifier") for malicious inputs.
     _validate_identifier(schema)
     _validate_identifier(table)
     for col in columns:
         _validate_identifier(col)
-    if watermark_field:
+    if watermark_field is not None:
         _validate_identifier(watermark_field)
 
     query = f'SELECT {", ".join(columns)} FROM {schema}.{table}'

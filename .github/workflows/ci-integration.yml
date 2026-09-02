@@ -35,10 +35,13 @@ jobs:
       - run: python -m ingestion.cli load --source customers --full
       - run: python -m ingestion.cli load --source orders
       - run: python -m ingestion.cli load --source returns
-      - run: python -m ingestion.cli load --source products
+      - run: |
+          uvicorn services.products_api.main:app --port 8100 &
+          sleep 2
+          python -m ingestion.cli load --source products
         env:
           PRODUCTS_API_URL: http://localhost:8100
-      - run: WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build --profiles-dir dbt
+      - run: WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build --profiles-dir dbt --project-dir dbt
       - run: python -m pytest tests/ -v
       - run: ruff check ingestion dashboards scripts tests
   config-validation:

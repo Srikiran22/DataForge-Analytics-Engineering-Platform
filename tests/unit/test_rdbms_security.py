@@ -1,5 +1,7 @@
 """Security unit tests for RDBMS identifier validation."""
+
 import pytest
+
 from ingestion.extractors.rdbms import _validate_identifier, extract_watermarked
 
 
