@@ -1,81 +1,151 @@
-# DataForge — Analytics Engineering Platform
+# DataForge
 
-Local-first, batch ELT platform for e-commerce analytics. Built to survive adversarial review.
+DataForge is a local-first analytics engineering project for building a reproducible batch ELT pipeline from source data to analytics-ready marts.
+
+The project is designed around a simple flow:
+
+```
+Source data
+   |
+   v
+Python ingestion
+   |
+   v
+Raw DuckDB layer
+   |
+   v
+dbt transformations
+   |
+   v
+Core models and marts
+   |
+   v
+Streamlit dashboard
+```
+
+It supports both file-based and database sources, keeps raw data separate from transformed models, tracks ingestion state and lineage, and uses dbt tests and contracts to catch data-quality problems before they reach the dashboard.
+
+## What it does
+
+- Ingests CSV, JSON/NDJSON, REST API, and PostgreSQL sources
+- Supports full and incremental loads using watermarks
+- Assigns batch IDs so loads can be rerun safely
+- Quarantines malformed or invalid records instead of silently dropping them
+- Stores source data in a schema-on-read DuckDB raw layer
+- Transforms data with dbt through staging, intermediate, core, and mart layers
+- Maintains customer history with an SCD2 snapshot
+- Builds analytics marts for sales, retention, products, returns, and inventory
+- Records batch lineage and operational pipeline information
+- Provides a read-only Streamlit dashboard over the marts
+- Runs unit, integration, dashboard, and dbt tests in CI
 
 ## Architecture
 
+### Sources
+
+The project can work with:
+
+- CSV files
+- JSON/NDJSON files
+- A mock products API
+- PostgreSQL as an OLTP source
+
+### Ingestion
+
+The Python ingestion package handles extraction, validation, batch IDs, watermarks, quarantine, loading, and lineage.
+
+A failed batch is not allowed to advance its watermark. This makes incremental ingestion easier to reason about and allows a failed load to be retried.
+
+### Raw layer
+
+DuckDB stores the raw records with ingestion metadata such as:
+
+- `_batch_id`
+- `_ingested_at`
+- `_source_file`
+
+Malformed records are kept in quarantine tables together with the reason for rejection.
+
+The raw layer intentionally preserves source fidelity. Business transformations happen later in dbt.
+
+### dbt
+
+The dbt project is organized into:
+
 ```
-orders.csv / order_events.json / products API / Postgres (OLTP source)
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ INGESTION (Python)                                          │
-│  • extractors: CSV / NDJSON / REST API / Postgres           │
-│  • watermark tracking (updated_at / returned_at)            │
-│  • quarantine (malformed + invalid FK)                      │
-│  • batch_id replace semantics (idempotent)                  │
-│  • lineage table (batch_id → raw table)                     │
-└─────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ RAW LAYER (DuckDB)                                          │
-│  • schema-on-read fidelity (all VARCHAR)                    │
-│  • metadata: _batch_id, _ingested_at, _source_file, ...     │
-│  • quarantine tables (reason, error_detail, raw_record)     │
-└─────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ DBT (staging → intermediate → marts)                        │
-│  • staging: rename/cast/normalize (no business logic)       │
-│  • intermediate: reusable business logic (no mart logic)    │
-│  • core: dims (SCD2 customer) + facts (incremental merge)   │
-│  • marts: 5 business tables (enforced contracts)            │
-│  • observability view (pipeline runs, freshness, quarantine)│
-└─────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ DASHBOARD (Streamlit, read-only DuckDB)                     │
-│  • 7 business panels + operational panel                    │
-│  • queries marts only (runtime guard)                       │
-│  • staleness flag (STALE_HOURS = 26)                        │
-└─────────────────────────────────────────────────────────────┘
+staging
+   -> intermediate
+      -> core
+         -> marts
 ```
 
-## Tech Stack
+Staging handles renaming, casting, and normalization. Intermediate models contain reusable business logic. Core models provide the analytical dimensions and facts. Marts expose the datasets used by the dashboard and business questions.
 
-| Layer | Tool | Version |
-|-------|------|---------|
-| Orchestration | Apache Airflow (DAG defined, not yet service-deployed) | 3.3.x |
-| Transformation | dbt (DuckDB adapter) | 1.12.3 / 1.11.0 |
-| Warehouse | DuckDB | 1.5.5 |
-| OLTP Source | PostgreSQL | 17.11 |
-| Ingestion | Python 3.13 | 3.13.15 |
-| Dashboard | Streamlit | 1.62.0 |
-| CI | GitHub Actions | v7 |
+## Analytics marts
 
-## Quick Start
+| Mart | Purpose |
+|---|---|
+| `mart_sales` | Revenue, order volume, and average order value |
+| `mart_customer_retention` | Repeat purchases and cohort retention |
+| `mart_product_performance` | Product-level performance |
+| `mart_returns` | Return rates, reasons, and financial impact |
+| `mart_inventory` | Inventory position |
+
+## Technology
+
+| Area | Technology |
+|---|---|
+| Ingestion | Python 3.13 |
+| Warehouse | DuckDB |
+| Source database | PostgreSQL 17 |
+| Transformation | dbt |
+| Orchestration | Apache Airflow |
+| Dashboard | Streamlit |
+| Testing | pytest, dbt tests |
+| Linting | Ruff |
+| CI | GitHub Actions |
+| Environment | Docker / WSL2 supported |
+
+Airflow is currently defined as part of the project but is not yet deployed as a production service. The warehouse itself is a DuckDB file rather than a separate database service.
+
+## Getting started
+
+### Requirements
+
+- Python 3.13+
+- Docker
+- `uv` or pip
+- WSL2 is recommended for the PostgreSQL/Docker workflow on Windows
+
+### Install dependencies
 
 ```bash
-# Prerequisites: Python 3.13+, Docker (for Postgres), WSL2 on Windows
-# Clone repo
-cd DataForge
-
-# 1. Install dependencies
 uv pip install -r requirements/dev.txt
+```
 
-# 2. Generate deterministic seed data
+### Generate the source data
+
+```bash
 python scripts/seed/generate_sources.py
+```
 
-# 3. Start Postgres (Docker)
+### Start PostgreSQL
+
+```bash
 docker compose up -d
-sleep 10
-python scripts/seed/populate_oltp.py
+```
 
-# 4. Initialize warehouse & load data
+Then populate the source database:
+
+```bash
+python scripts/seed/populate_oltp.py
+```
+
+### Initialize and load the warehouse
+
+```bash
 python -m ingestion.cli init-warehouse
+
 python -m ingestion.cli load --source customers --full
 python -m ingestion.cli load --source orders
 python -m ingestion.cli load --source returns
@@ -84,149 +154,118 @@ python -m ingestion.cli load --source regions
 python -m ingestion.cli load --source order_items
 python -m ingestion.cli load --source payments
 python -m ingestion.cli load --source inventory_levels
+```
 
-# 5. Build dbt models
+### Build the dbt models
+
+```bash
 WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build
+```
 
-# 6. Run tests
+### Run tests
+
+```bash
 pytest tests/
+```
 
-# 7. Launch dashboard (optional)
+### Start the dashboard
+
+```bash
 streamlit run dashboards/app.py
 ```
 
-## Repository Structure
+## Repository layout
 
 ```
 DataForge/
-├── ingestion/           # Python extraction/loading
-├── dbt/                 # dbt project (models, tests, macros, snapshots)
-├── dashboards/          # Streamlit app (marts-only queries)
-├── airflow/             # Airflow DAG (not yet service-deployed)
-├── quality/             # Data contracts (YAML)
-├── scripts/             # seed, probe, report utilities
-├── tests/               # unit / integration / dashboard tests
-├── docs/                # architecture, ADRs, lineage, quality strategy
-├── docker-compose.yml   # Postgres (OLTP source)
-├── .wslconfig           # mirrored networking for WSL2
-├── .env.example         # env template
-├── requirements/        # base.txt, dev.txt, resolved-versions.txt
-└── Makefile             # convenience targets
+├── ingestion/        # Source extraction and loading
+├── dbt/              # dbt models, tests, macros, and snapshots
+├── dashboards/       # Streamlit dashboard
+├── airflow/          # Airflow DAGs and tests
+├── quality/          # Data contracts
+├── scripts/          # Seed data and utility scripts
+├── tests/             # Unit and integration tests
+├── docs/              # Architecture, ADRs, data quality, and other documentation
+├── requirements/      # Dependency definitions
+├── docker-compose.yml # PostgreSQL source database
+└── Makefile           # Project commands
 ```
 
-## Business Questions Answered
+## Data quality and reliability
 
-| ID | Question | Mart |
-|----|----------|------|
-| BQ-01 | Monthly revenue trend by region | `mart_sales` |
-| BQ-02 | Average order value trend | `mart_sales` |
-| BQ-03 | Order count by status | `mart_sales` |
-| BQ-04 | Repeat purchase rate | `mart_customer_retention` |
-| BQ-05 | Cohort retention curves | `mart_customer_retention` |
-| BQ-06 | Product performance | `mart_product_performance` |
-| BQ-07 | Return rates & reasons | `mart_returns` |
-| BQ-08 | Financial impact of returns | `mart_returns` + `mart_sales` |
-| BQ-09 | Inventory position | `mart_inventory` |
+The pipeline treats data quality as part of the load process rather than something checked only at the end.
 
-## Documentation Index
+Examples include:
 
-| Document | Purpose |
-|----------|---------|
-| `docs/architecture/architecture-sketch.md` | Layered flow + inter-layer contracts |
-| `docs/adr/` | ADR 0001–0006 (warehouse, orchestrator, transformation, quality, lineage, dashboard) |
-| `docs/data_model/` | 8 table docs + star_schema.md + scd2_customer.md |
-| `docs/metrics_dictionary.md` | Single source of truth for all metrics |
-| `docs/data_quality_strategy.md` | 7 categories, tool assignment, imperfection→mechanism map |
-| `docs/lineage/lineage_chain.md` | orders.csv → mart_sales full trace |
-| `docs/performance_benchmarks.md` | Real measured timings, optimization case study |
-| `docs/schema_evolution_policy.md` | 5 change types, policy, evidence |
-| `docs/security_review.md` | Secrets, SQLi, path traversal, CI permissions |
-| `docs/privacy_review.md` | PII fields, synthetic data, access boundary |
-| `docs/audit_log.md` | All defects found/fixed during Group 7 adversarial audit |
-| `docs/limitations.md` | Honest gaps, scaling path, environment constraints |
+- Schema and structural checks
+- Required-field validation
+- Foreign-key validation
+- Accepted-value checks
+- dbt uniqueness and not-null tests
+- Batch lineage
+- Watermark tracking
+- Quarantine for rejected records
+- Freshness checks
+- Incremental model tests
 
-## Performance (measured 2026-08-26)
+The dashboard reads from analytics marts rather than directly from raw tables.
 
-| Operation | Time |
-|-----------|------|
-| `generate_sources` (1.1M rows) | 14–17s |
-| `load customers` (40k) | 1.1s |
-| `load orders` (248k) | 24.8s (WSL) / 8.6s (Win warm) |
-| `dbt snapshot` | 0.43s |
-| `dbt build --select fct_orders --full-refresh` | 1.27s |
-| `dbt build --select fct_orders` (incremental, no new data) | 1.02s |
-| `dbt build` (all 25 models, 214 tests) | 9.7s |
-| `mart_sales` sum query | 0.002s |
-| `mart_product` top20 | 0.006s |
+## Business questions
 
-## Test Results (as of 2026-08-26)
+The current marts support questions such as:
 
-| Suite | Passed | Skipped | Environment |
-|-------|--------|---------|-------------|
-| Unit + Integration (Windows) | 27 | 6 | native Python 3.13 |
-| Integration (WSL, PG) | 33 | 0 | WSL2 Ubuntu 26.04 |
-| Dashboard | 6 | 0 | native Python 3.13 |
-| **dbt build** | **214** | **0** | DuckDB 1.5.5 |
-| **dbt snapshot** | **1** | 0 | — |
+- How is monthly revenue changing by region?
+- What is the average order value over time?
+- How many orders are in each status?
+- What percentage of customers make repeat purchases?
+- How does retention change across customer cohorts?
+- Which products perform best?
+- What are the main return reasons and their financial impact?
+- What is the current inventory position?
 
-**Total unique tests: 46 passed, 6 skipped (Postgres-dependent)**
+## Testing
 
-## Current Status (as of Group 6 gate)
+The repository contains unit, integration, dashboard, and dbt tests.
 
-| Area | Status |
-|------|--------|
-| Ingestion + Raw | ✅ |
-| dbt (staging/core/marts/snapshot) | ✅ |
-| Dashboard (7 panels + ops) | ✅ |
-| Documentation | ✅ |
-| Tests (unit/integration/dashboard) | ✅ |
-| dbt build | ✅ |
-| Lint (ruff) | ✅ |
-| Docker (Postgres) | ✅ |
-| Airflow DAG (parse + logic) | ✅ |
-| **Airflow service deployment** | ⚠️ OPEN |
-| **Airflow backfill** | ⚠️ OPEN |
-| **Full-refresh vs incremental parity (new batch)** | ⚠️ OPEN (smoke PASS) |
-| **Adversarial late-order injection** | ⚠️ OPEN |
-| **Schema evolution (remove/rename/type)** | ⚠️ OPEN |
-| **I-08 anomaly detection** | ⚠️ OPEN |
+The documented baseline includes:
 
-## Reproduction
+- 46 unique Python tests passed
+- 6 Postgres-dependent tests skipped in environments without the source database
+- 214 dbt tests passed
+- dbt snapshot tests passing
 
-```bash
-# From project root:
-uv pip install -r requirements/dev.txt
-python scripts/seed/generate_sources.py
-docker compose up -d  # (if Docker available)
-python scripts/seed/populate_oltp.py
-python -m ingestion.cli init-warehouse
-python -m ingestion.cli load --source customers --full
-python -m ingestion.cli load --source orders
-python -m ingestion.cli load --source returns
-python -m ingestion.cli load --source products
-python -m ingestion.cli load --source regions
-python -m ingestion.cli load --source order_items
-python -m ingestion.cli load --source payments
-python -m ingestion.cli load --source inventory_levels
-WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build
-pytest tests/
-streamlit run dashboards/app.py
-```
+Performance measurements and environment-specific results are documented in `docs/performance_benchmarks.md`.
+
+## Current limitations
+
+This is a portfolio and educational project, not a production deployment.
+
+Known areas that still require environment-dependent verification include:
+
+- Airflow scheduler/webserver deployment
+- Airflow backfill testing
+- Full-refresh versus incremental parity with newly introduced batches
+- Adversarial late-arriving data scenarios
+- Schema evolution scenarios
+- Anomaly-detection wiring for the observability layer
+
+These limitations are documented in more detail in `docs/limitations.md`.
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| `docs/architecture/` | Pipeline architecture and layer contracts |
+| `docs/adr/` | Architecture decision records |
+| `docs/data_model/` | Table and star-schema documentation |
+| `docs/metrics_dictionary.md` | Definitions for analytical metrics |
+| `docs/data_quality_strategy.md` | Data-quality approach |
+| `docs/lineage/` | End-to-end lineage examples |
+| `docs/performance_benchmarks.md` | Measured performance |
+| `docs/security_review.md` | Security review |
+| `docs/privacy_review.md` | Privacy considerations |
+| `docs/limitations.md` | Current limitations and future work |
 
 ## License
 
-MIT — but this is a portfolio/educational project, not production software.
-
-## Final Status
-
-**⚠️ COMPLETE — ONLY ENVIRONMENT-DEPENDENT VERIFICATION REMAINS**
-
-The implementation is functionally complete and tested. Seven items remain **OPEN** because they require:
-- An Airflow service deployment (scheduler + webserver, ~1GB RAM)
-- Adversarial injection scripts that need a running pipeline
-- Schema-evolution fixtures that need controlled execution
-- I-08 anomaly detection wiring to observability
-
-These are **environment-dependent**, not implementation gaps. The architecture, implementation, and tests for all seven items exist and are ready to execute when the environment is available.
-
-*Last updated: 2026-08-26*
+MIT. This repository is primarily intended as a portfolio and educational project.
