@@ -1,41 +1,40 @@
 # Contributing
 
-DataForge is primarily a portfolio and educational project. Contributions are welcome when they improve correctness, reproducibility, documentation, or maintainability.
+DataForge is primarily a portfolio and educational project. Contributions should preserve the existing separation between ingestion, transformation, and presentation layers.
 
-## Before making changes
+## Development setup
 
-- Read the architecture documentation in `docs/architecture/`.
-- Check the relevant ADRs in `docs/adr/`.
-- Run the existing test suite before changing behavior.
-- Keep raw-layer, dbt, and dashboard responsibilities separate.
+Follow the setup instructions in [README.md](README.md).
 
-## Development checks
-
-Run:
+Before changing code, run the relevant tests. For a full local check:
 
 ```bash
 pytest tests/
+ruff check ingestion dashboards scripts tests
 ```
 
 For dbt changes:
 
 ```bash
-WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build
+WAREHOUSE_PATH=data/warehouse/analytics.duckdb dbt build --profiles-dir dbt --project-dir dbt
 ```
 
-For linting:
+## Repository conventions
 
-```bash
-ruff check .
-```
+- Keep extraction and loading logic in `ingestion/`.
+- Keep analytical transformations in `dbt/`.
+- Keep dashboard code focused on presentation and mart consumption.
+- Preserve the raw-layer fidelity rules.
+- Do not commit `.env` files, credentials, generated warehouse files, or local artifacts.
+- Update tests when changing ingestion behavior, data contracts, or model definitions.
+- Update the relevant documentation when an architectural decision changes.
 
 ## Pull requests
 
-A useful pull request should explain:
+A useful change should include:
 
-1. What changed.
-2. Why the change was needed.
-3. Which tests were run.
-4. Any environment-dependent checks that could not be run.
+- A clear description of the change and its reason.
+- Tests or checks that were run.
+- Any environment-specific checks that could not be run.
 
-Avoid changing generated data, local warehouse files, credentials, or environment-specific configuration in commits.
+Keep commits focused on one logical change where practical.
